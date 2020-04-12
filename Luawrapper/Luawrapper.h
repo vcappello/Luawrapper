@@ -4,10 +4,23 @@
 #include <string>
 #include <vector>
 
+// ClassParam is declared in the global namespace in order to
+// allow specialization anywhere
+template<typename TClass>
+struct ClassParam
+{
+	static constexpr char lua_name[] = "NONAME";
+
+	static std::vector<luaL_Reg> mem_funs;
+};
+
 namespace lua
 {
 	/*==================================================
 	  LUA types
+
+	  This section contain the definition of the class
+	  Type 
 	====================================================*/
 
 	template<typename T, typename Enable = void>
@@ -16,9 +29,9 @@ namespace lua
 		static constexpr bool is_lua_type = false;
 
 		static void push(lua_State* lua, const T& value) {};
-		static T get(lua_State* lua, int index) { return T{}; };
-		static T check(lua_State* lua, int arg) { return T{}; };
-		static bool type_check(lua_State* lua, int index) { return false; };
+		static T get(lua_State* lua, int index) { };
+		static T check(lua_State* lua, int arg) { };
+		static bool type_check(lua_State* lua, int index) { };
 	};
 
 	template<>
@@ -69,42 +82,48 @@ namespace lua
 	  User defined class types
 	====================================================*/
 
-	template<typename TClass>
-	struct ClassParam
-	{
-		static constexpr char lua_name[] = nullptr;
-
-		static std::vector<luaL_Reg> mem_funs;
-	};
-
 	template<typename T>
-	struct Type<T, std::enable_if_t<std::is_class<T>::value>>
+	struct Type<T, std::enable_if_t<std::is_class<T>::value || std::is_class<std::remove_pointer_t<T>>::value>>
 	{
 		static constexpr bool is_lua_type = true;
 
-		static void push(lua_State* lua, T* value) 
+		using TPtr = std::conditional_t<std::is_class<T>::value, T*, T>;
+		using TVal = std::conditional_t<std::is_class<T>::value, T, std::remove_pointer_t<T>>;
+
+		static void push(lua_State* lua, TPtr value) 
 		{  
-			// Create a new metatable
-			luaL_newmetatable(lua, ClassParam<T>::lua_name);
-			// Metatable index for objects
-			lua_pushvalue(lua, -1);
-			lua_setfield(lua, -2, "__index");
-			// Set all methods
-			for (auto r : ClassParam<T>::mem_funs)
+			if (luaL_newmetatable(lua, ClassParam<TVal>::lua_name) == 1)
 			{
-				lua_pushcfunction(lua, r.func);
-				lua_setfield(lua, -2, r.name);
+				// Metatable index for objects
+				lua_pushvalue(lua, -1);
+				lua_setfield(lua, -2, "__index");
+				// Set all methods
+				for (auto r : ClassParam<TVal>::mem_funs)
+				{
+					lua_pushcfunction(lua, r.func);
+					lua_setfield(lua, -2, r.name);
+				}
+				// Pop the metatable from the stack
+				lua_pop(lua, 1);
+				// Put the object in the stack
+				*reinterpret_cast<TPtr*>(lua_newuserdata(lua, sizeof(TPtr))) = value;
+				luaL_setmetatable(lua, ClassParam<TVal>::lua_name);
 			}
-			// Pop the metatable from the stack
-			lua_pop(lua, 1);
-			// Put the object in the stack
-			*reinterpret_cast<T**>(lua_newuserdata(lua, sizeof(T*))) = value;
-			luaL_setmetatable(lua, ClassParam<T>::lua_name);
+			else
+			{
+				*reinterpret_cast<TPtr*>(lua_newuserdata(lua, sizeof(TPtr))) = value;
+				luaL_getmetatable(lua, ClassParam<TVal>::lua_name);
+				lua_setmetatable(lua, -2);
+			}
 		}
 
-		//static T* get(lua_State* lua, int index) { return ...; }
-		static T* check(lua_State* lua, int arg) { return (*reinterpret_cast<T**>(luaL_checkudata(lua, arg, ClassParam<T>::lua_name))); }
-		static T* type_check(lua_State* lua, int arg) { return (*reinterpret_cast<T**>(luaL_testudata(lua, arg, ClassParam<T>::lua_name))); }
+		static TPtr get(lua_State* lua, int index) 
+		{  
+			return (*reinterpret_cast<TPtr*>(lua_touserdata(lua, index)));
+		}
+
+		static TPtr check(lua_State* lua, int arg) { return (*reinterpret_cast<TPtr*>(luaL_checkudata(lua, arg, ClassParam<TVal>::lua_name))); }
+		static TPtr type_check(lua_State* lua, int arg) { return (*reinterpret_cast<TPtr*>(luaL_testudata(lua, arg, ClassParam<TVal>::lua_name))); }
 	};
 
 	/*==================================================

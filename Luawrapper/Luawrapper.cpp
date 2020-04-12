@@ -25,7 +25,7 @@ void test_function()
 	lua::set_global_fun(L, {
 		{ "CSum", [](lua_State* L)->int { return lua::reg_fun(L, CSum); } },
 		{ "CConcat", [](lua_State* L)->int { return lua::reg_fun(L, CConcat); } }
-	});
+		});
 
 	luaL_loadstring(L, R"***(
 		local result = CSum(1, 2)
@@ -54,19 +54,21 @@ public:
 	}
 };
 
-namespace lua
+CClass* CGetClass()
 {
-	template<>
-	struct ClassParam<CClass>
-	{
-		static constexpr char lua_name[] = "CClass";
-
-		inline static const std::vector<luaL_Reg> mem_funs = { 
-			{ "sum", [](lua_State* L)->int { return lua::reg_mem_fun(L, &CClass::sum); } },
-			{ "concat", [](lua_State* L)->int { return lua::reg_mem_fun(L, &CClass::concat); } }
-		};
-	};
+	return new CClass();
 }
+
+template<>
+struct ClassParam<CClass>
+{
+	static constexpr char lua_name[] = "CClass";
+
+	inline static const std::vector<luaL_Reg> mem_funs = {
+		{ "sum", [](lua_State* L)->int { return lua::reg_mem_fun(L, &CClass::sum); } },
+		{ "concat", [](lua_State* L)->int { return lua::reg_mem_fun(L, &CClass::concat); } }
+	};
+};
 
 void test_class()
 {
@@ -79,7 +81,19 @@ void test_class()
 	lua::Type<CClass>::push(L, obj);
 	lua_setglobal(L, "CObj");
 
+	lua::set_global_fun(L, { 
+		{ "CGetClass", [](lua_State* L)->int { return lua::reg_fun(L, CGetClass); } },
+	});
+
 	luaL_loadstring(L, R"***(
+		print '1'
+		local obj = CGetClass()
+		print '2'
+		local r0 = obj:sum(5, 5)
+		print '3'
+		print (r0)
+		print '4'
+
 		local result = CObj:sum(1, 2)
 		print (result)
 
