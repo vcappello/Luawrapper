@@ -130,18 +130,18 @@ namespace lua
 	  Register C/C++ function
 
 	  Usage:
-		lua::set_global_fun(L, {
-			{ "CSum", [](lua_State* L)->int { return lua::reg_fun(L, CSum); } },
-			{ "CConcat", [](lua_State* L)->int { return lua::reg_fun(L, CConcat); } }
+		lua::set_global_fun(lua, {
+			{ "CSum", [](lua_State* lua)->int { return lua::invoke_fun(lua, CSum); } },
+			{ "CConcat", [](lua_State* lua)->int { return lua::invoke_fun(lua, CConcat); } }
 		});
 	====================================================*/
 
 	// At the end call the C function
 	template <typename TRetVal, typename... TFunArgs, typename... TEvaluatedArgs>
-	int reg_fun(lua_State* L, int, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(), TEvaluatedArgs... evaluated_args) 
+	int invoke_fun(lua_State* lua, int, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(), TEvaluatedArgs... evaluated_args) 
 	{
 		auto ret = fn(std::forward<TEvaluatedArgs>(evaluated_args)...);
-		Type<TRetVal>::push(L, ret);
+		Type<TRetVal>::push(lua, ret);
 		return 1;
 	}
 
@@ -149,41 +149,42 @@ namespace lua
 	// call the c function
 	template <typename TRetVal, typename... TFunArgs, typename TArg0, typename... TOtherArgs, typename... TEvaluatedArgs>
 	typename std::enable_if<Type<TArg0>::is_lua_type, int>::type
-		reg_fun(lua_State* L, int i, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) 
+		invoke_fun(lua_State* lua, int i, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) 
 	{
 		TRetVal(*other_fn)(TOtherArgs... other_values) = nullptr;
-		auto val = Type<TArg0>::get(L, i);
-		return reg_fun(L, i + 1, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
+		auto val = Type<TArg0>::get(lua, i);
+		return invoke_fun(lua, i + 1, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
 	}
 
 	// Helper function, entry point
-	// Call like: reg_fun(L, global_func);
+	// Call like: invoke_fun(lua, global_func);
 	template <typename TRetVal, typename... TFunArgs>
-	int reg_fun(lua_State* L, TRetVal(*fn)(TFunArgs... args)) 
+	int invoke_fun(lua_State* lua, TRetVal(*fn)(TFunArgs... args)) 
 	{
-		return reg_fun(L, 1, fn, fn);
+		return invoke_fun(lua, 1, fn, fn);
 	}
 
-	void set_global_fun(lua_State* L, std::vector<luaL_Reg> regs)
+	void set_global_fun(lua_State* lua, std::vector<luaL_Reg> regs)
 	{
 		for (auto r : regs)
 		{
-			lua_pushcfunction(L, r.func);
-			lua_setglobal(L, r.name);
+			lua_pushcfunction(lua, r.func);
+			lua_setglobal(lua, r.name);
 		}
 	}
 
 	/*==================================================
 	  Register C/C++ member function
+
 	  Usage:
-		reg_mem_fun(L, &my_class::my_method);
+		invoke_mem_fun(lua, &my_class::my_method);
 	====================================================*/
 
 	// At the end call the C function
 	template <typename TObject, typename TRetVal, typename... TFunArgs, typename... TEvaluatedArgs>
-	int reg_mem_fun(lua_State* L, int, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(), TEvaluatedArgs... evaluated_args) {
+	int invoke_mem_fun(lua_State* lua, int, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(), TEvaluatedArgs... evaluated_args) {
 		auto ret = (obj_ptr->*fn)(std::forward<TEvaluatedArgs>(evaluated_args)...);
-		Type<TRetVal>::push(L, ret);
+		Type<TRetVal>::push(lua, ret);
 		return 1;
 	}
 
@@ -191,18 +192,36 @@ namespace lua
 	// call the c function
 	template <typename TObject, typename TRetVal, typename... TFunArgs, typename TArg0, typename... TOtherArgs, typename... TEvaluatedArgs>
 	typename std::enable_if<Type<TArg0>::is_lua_type, int>::type
-		reg_mem_fun(lua_State* L, int i, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) {
+		invoke_mem_fun(lua_State* lua, int i, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) {
 		TRetVal(TObject:: * other_fn)(TOtherArgs... other_values) = nullptr;
-		auto val = Type<TArg0>::get(L, i);
-		return reg_mem_fun(L, i + 1, obj_ptr, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
+		auto val = Type<TArg0>::get(lua, i);
+		return invoke_mem_fun(lua, i + 1, obj_ptr, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
 	}
 
 	// Helper function, entry point
-	// Call like: reg_fun(L, global_func);
+	// Call like: invoke_fun(lua, global_func);
 	template <typename TObject, typename TRetVal, typename... TFunArgs>
-	int reg_mem_fun(lua_State* L, TRetVal(TObject::* fn)(TFunArgs... args)) {
-		auto obj_ptr = Type<TObject>::check(L, 1);
-		return reg_mem_fun(L, 2, obj_ptr, fn, fn);
+	int invoke_mem_fun(lua_State* lua, TRetVal(TObject::* fn)(TFunArgs... args)) {
+		auto obj_ptr = Type<TObject>::check(lua, 1);
+		return invoke_mem_fun(lua, 2, obj_ptr, fn, fn);
 	}
 
+	/*==================================================
+	  Set global value
+	====================================================*/
+	template<typename T>
+	std::enable_if_t<!std::is_invocable_r_v<int, T, lua_State*>>
+	set_global(lua_State* lua, const char* name, T value)
+	{
+		Type<T>::push(lua, value);
+		lua_setglobal(lua, name);
+	}
+
+	template <typename T>
+	std::enable_if_t<std::is_invocable_r_v<int, T, lua_State*>>
+	set_global(lua_State* lua, const char* name, T fn)
+	{
+		lua_pushcfunction(lua, fn);
+		lua_setglobal(lua, name);
+	}
 }
