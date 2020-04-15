@@ -224,4 +224,61 @@ namespace lua
 		lua_pushcfunction(lua, fn);
 		lua_setglobal(lua, name);
 	}
+
+	/*==================================================
+	  Get global value
+	====================================================*/
+	template<typename TRet, typename... TArgs>
+	struct lua_function
+	{
+		lua_function(lua_State* state, const std::string& name) : state( state ), name( name ) { }
+
+		TRet operator()(TArgs... args)
+		{
+			lua_getglobal(state, name.c_str());
+
+			(Type<TArgs>::push(state, args), ...);
+
+			if (lua_pcall(state, sizeof...(TArgs), 1, 0) != 0)
+			{
+				// TODO: handle errors
+			}
+
+			return Type<TRet>::get(state, -1);
+		}
+
+	protected:
+		std::string name;
+		lua_State* state;
+	};
+
+	template<typename... TArgs>
+	struct lua_function<void, TArgs...>
+	{
+		lua_function(lua_State* state, const std::string& name) : state(state), name(name) { }
+
+		void operator()(TArgs... args)
+		{
+			lua_getglobal(state, name.c_str());
+
+			(Type<TArgs>::push(state, args), ...);
+
+			if (lua_pcall(state, sizeof...(TArgs), 0, 0) != 0)
+			{
+				// TODO: handle errors
+			}
+		}
+
+	protected:
+		std::string name;
+		lua_State* state;
+	};
+
+	template<typename T>
+	T get_global(lua_State* lua, const char* name)
+	{
+		lua_getglobal(lua, name);
+		return Type<T>::get(lua, 1);
+	}
+
 }

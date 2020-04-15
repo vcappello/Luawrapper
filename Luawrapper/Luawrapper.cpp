@@ -33,9 +33,29 @@ void test_function()
 
 		local str = CConcat('Hello', 'World')
 		print (str)
+
+		luaVar = 55
+
+		function luaFun(a)
+			return a + 1
+		end
+
+		function luaFun2(a)
+			print 'luaFun2'
+		end
 	)***");
 
 	lua_pcall(L, 0, 0, 0);
+
+	auto luaVar = lua::get_global<int>(L, "luaVar");
+	std::cout << "luaVar = " << luaVar << std::endl;
+
+	auto luaFun = lua::lua_function<int, int>(L, "luaFun");
+	int luaFunRes = luaFun(5);
+	std::cout << "luaFun result = " << luaFunRes << std::endl;
+
+	auto luaFun2 = lua::lua_function<void, int>(L, "luaFun2");
+	luaFun2(5);
 
 	lua_close(L);
 }
