@@ -3,6 +3,7 @@
 #include "lua.hpp"
 #include <string>
 #include <vector>
+#include <stdexcept>
 
 // ClassParam is declared in the global namespace in order to
 // allow specialization anywhere
@@ -16,6 +17,13 @@ struct ClassParam
 
 namespace lua
 {
+	class error : public std::runtime_error
+	{
+	public:
+		error(const std::string& msg) : runtime_error(msg.c_str()) {}
+		virtual ~error() noexcept {}
+	};
+
 	/*==================================================
 	  state types
 
@@ -241,6 +249,20 @@ namespace lua
 	}
 
 	/*==================================================
+	  Call
+	====================================================*/
+	int pcall(lua_State* state, int nargs = 0, int nresults = 0, int msgh = 0)
+	{
+		int result = 0;
+		if (result = lua_pcall(state, nargs, nresults, msgh) != 0)
+		{
+			auto msg = Type<std::string>::get(state, -1);
+			lua_pop(state, 1);
+			throw error(msg);
+		}
+	}
+
+	/*==================================================
 	  Get global value
 	====================================================*/
 	template<typename TRet, typename... TArgs>
@@ -254,10 +276,7 @@ namespace lua
 
 			(Type<TArgs>::push(state, args), ...);
 
-			if (lua_pcall(state, sizeof...(TArgs), 1, 0) != 0)
-			{
-				// TODO: handle errors
-			}
+			pcall(state, sizeof...(TArgs), 1, 0);
 
 			return Type<TRet>::get(state, -1);
 		}
@@ -278,10 +297,7 @@ namespace lua
 
 			(Type<TArgs>::push(state, args), ...);
 
-			if (lua_pcall(state, sizeof...(TArgs), 0, 0) != 0)
-			{
-				// TODO: handle errors
-			}
+			pcall(state, sizeof...(TArgs), 0, 0);
 		}
 
 	protected:
@@ -295,5 +311,4 @@ namespace lua
 		lua_getglobal(state, name);
 		return Type<T>::get(state, 1);
 	}
-
 }

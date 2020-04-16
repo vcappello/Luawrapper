@@ -45,17 +45,38 @@ void test_function()
 		end
 	)***");
 
-	lua_pcall(L, 0, 0, 0);
+	try
+	{
+		lua::pcall(L);
+	}
+	catch (lua::error& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
 
 	auto luaVar = lua::get_global<int>(L, "luaVar");
 	std::cout << "luaVar = " << luaVar << std::endl;
 
 	auto luaFun = lua::lua_function<int, int>(L, "luaFun");
-	int luaFunRes = luaFun(5);
-	std::cout << "luaFun result = " << luaFunRes << std::endl;
+	try
+	{
+		int luaFunRes = luaFun(5);
+		std::cout << "luaFun result = " << luaFunRes << std::endl;
+	}
+	catch (lua::error& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
 
 	auto luaFun2 = lua::lua_function<void, int>(L, "luaFun2");
-	luaFun2(5);
+	try
+	{
+		luaFun2(5);
+	}
+	catch (lua::error& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
 
 	lua_close(L);
 }
@@ -125,7 +146,14 @@ void test_class()
 		print (str)
 	)***");
 
-	lua_pcall(L, 0, 0, 0);
+	try
+	{
+		lua::pcall(L);
+	}
+	catch (lua::error& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
 
 	lua_close(L);
 }
