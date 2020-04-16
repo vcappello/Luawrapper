@@ -63,6 +63,9 @@ void test_function()
 class CClass
 {
 public:
+	int getX() { return m_x; }
+	void setX(int value) { m_x = value; }
+
 	int sum(int n1, int n2)
 	{
 		return n1 + n2;
@@ -72,6 +75,9 @@ public:
 	{
 		return s1 + s2;
 	}
+
+protected:
+	int m_x;
 };
 
 CClass* CGetClass()
@@ -85,6 +91,8 @@ struct ClassParam<CClass>
 	static constexpr char lua_name[] = "CClass";
 
 	inline static const std::vector<luaL_Reg> mem_funs = {
+		{ "getX", [](lua_State* L)->int { return lua::invoke_mem_fun(L, &CClass::getX); } },
+		{ "setX", [](lua_State* L)->int { return lua::invoke_mem_fun(L, &CClass::setX); } },
 		{ "sum", [](lua_State* L)->int { return lua::invoke_mem_fun(L, &CClass::sum); } },
 		{ "concat", [](lua_State* L)->int { return lua::invoke_mem_fun(L, &CClass::concat); } }
 	};
@@ -106,6 +114,9 @@ void test_class()
 		local obj = CGetClass()
 		local r0 = obj:sum(5, 5)
 		print (r0)
+
+		obj:setX(100)
+		print (obj:getX())
 
 		local result = CObj:sum(1, 2)
 		print (result)

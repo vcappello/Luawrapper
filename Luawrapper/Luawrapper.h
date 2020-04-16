@@ -17,7 +17,7 @@ struct ClassParam
 namespace lua
 {
 	/*==================================================
-	  LUA types
+	  state types
 
 	  This section contain the definition of the class
 	  Type 
@@ -28,10 +28,10 @@ namespace lua
 	{
 		static constexpr bool is_lua_type = false;
 
-		static void push(lua_State* lua, const T& value) {};
-		static T get(lua_State* lua, int index) { };
-		static T check(lua_State* lua, int arg) { };
-		static bool type_check(lua_State* lua, int index) { };
+		static void push(lua_State* state, const T& value) {};
+		static T get(lua_State* state, int index) { };
+		static T check(lua_State* state, int arg) { };
+		static bool type_check(lua_State* state, int index) { };
 	};
 
 	template<>
@@ -39,10 +39,10 @@ namespace lua
 	{
 		static constexpr bool is_lua_type = true;
 
-		static void push(lua_State* lua, const int& value) { lua_pushinteger(lua, value); }
-		static int get(lua_State* lua, int index) { return lua_tointeger(lua, index); }
-		static int check(lua_State* lua, int arg) { return luaL_checkinteger(lua, arg); }
-		static bool type_check(lua_State* lua, int index) { return lua_isinteger(lua, index); }
+		static void push(lua_State* state, const int& value) { lua_pushinteger(state, value); }
+		static int get(lua_State* state, int index) { return lua_tointeger(state, index); }
+		static int check(lua_State* state, int arg) { return luaL_checkinteger(state, arg); }
+		static bool type_check(lua_State* state, int index) { return lua_isinteger(state, index); }
 	};
 
 	template<>
@@ -50,10 +50,10 @@ namespace lua
 	{
 		static constexpr bool is_lua_type = true;
 
-		static void push(lua_State* lua, const double& value) { lua_pushnumber(lua, value); }
-		static double get(lua_State* lua, int index) { return lua_tonumber(lua, index); }
-		static double check(lua_State* lua, int arg) { return luaL_checknumber(lua, arg); }
-		static bool type_check(lua_State* lua, int index) { return lua_isnumber(lua, index); }
+		static void push(lua_State* state, const double& value) { lua_pushnumber(state, value); }
+		static double get(lua_State* state, int index) { return lua_tonumber(state, index); }
+		static double check(lua_State* state, int arg) { return luaL_checknumber(state, arg); }
+		static bool type_check(lua_State* state, int index) { return lua_isnumber(state, index); }
 	};
 
 	template<>
@@ -61,10 +61,10 @@ namespace lua
 	{
 		static constexpr bool is_lua_type = true;
 
-		static void push(lua_State* lua, const bool& value) { lua_pushboolean(lua, value); }
-		static bool get(lua_State* lua, int index) { return lua_toboolean(lua, index); }
-		static bool check(lua_State* lua, int arg) { return lua_toboolean(lua, arg); }
-		static bool type_check(lua_State* lua, int index) { return lua_isboolean(lua, index); }
+		static void push(lua_State* state, const bool& value) { lua_pushboolean(state, value); }
+		static bool get(lua_State* state, int index) { return lua_toboolean(state, index); }
+		static bool check(lua_State* state, int arg) { return lua_toboolean(state, arg); }
+		static bool type_check(lua_State* state, int index) { return lua_isboolean(state, index); }
 	};
 
 	template<>
@@ -72,10 +72,10 @@ namespace lua
 	{
 		static constexpr bool is_lua_type = true;
 
-		static void push(lua_State* lua, const std::string& value) { lua_pushstring(lua, value.c_str()); }
-		static std::string get(lua_State* lua, int index) { return lua_tostring(lua, index); }
-		static std::string check(lua_State* lua, int arg) { return luaL_checkstring(lua, arg); }
-		static bool type_check(lua_State* lua, int index) { return lua_isboolean(lua, index); }
+		static void push(lua_State* state, const std::string& value) { lua_pushstring(state, value.c_str()); }
+		static std::string get(lua_State* state, int index) { return lua_tostring(state, index); }
+		static std::string check(lua_State* state, int arg) { return luaL_checkstring(state, arg); }
+		static bool type_check(lua_State* state, int index) { return lua_isboolean(state, index); }
 	};
 
 	/*==================================================
@@ -90,58 +90,66 @@ namespace lua
 		using TPtr = std::conditional_t<std::is_class<T>::value, T*, T>;
 		using TVal = std::conditional_t<std::is_class<T>::value, T, std::remove_pointer_t<T>>;
 
-		static void push(lua_State* lua, TPtr value) 
+		static void push(lua_State* state, TPtr value) 
 		{  
-			if (luaL_newmetatable(lua, ClassParam<TVal>::lua_name) == 1)
+			if (luaL_newmetatable(state, ClassParam<TVal>::lua_name) == 1)
 			{
 				// Metatable index for objects
-				lua_pushvalue(lua, -1);
-				lua_setfield(lua, -2, "__index");
+				lua_pushvalue(state, -1);
+				lua_setfield(state, -2, "__index");
 				// Set all methods
 				for (auto r : ClassParam<TVal>::mem_funs)
 				{
-					lua_pushcfunction(lua, r.func);
-					lua_setfield(lua, -2, r.name);
+					lua_pushcfunction(state, r.func);
+					lua_setfield(state, -2, r.name);
 				}
 				// Pop the metatable from the stack
-				lua_pop(lua, 1);
+				lua_pop(state, 1);
 				// Put the object in the stack
-				*reinterpret_cast<TPtr*>(lua_newuserdata(lua, sizeof(TPtr))) = value;
-				luaL_setmetatable(lua, ClassParam<TVal>::lua_name);
+				*reinterpret_cast<TPtr*>(lua_newuserdata(state, sizeof(TPtr))) = value;
+				luaL_setmetatable(state, ClassParam<TVal>::lua_name);
 			}
 			else
 			{
-				*reinterpret_cast<TPtr*>(lua_newuserdata(lua, sizeof(TPtr))) = value;
-				luaL_getmetatable(lua, ClassParam<TVal>::lua_name);
-				lua_setmetatable(lua, -2);
+				*reinterpret_cast<TPtr*>(lua_newuserdata(state, sizeof(TPtr))) = value;
+				luaL_getmetatable(state, ClassParam<TVal>::lua_name);
+				lua_setmetatable(state, -2);
 			}
 		}
 
-		static TPtr get(lua_State* lua, int index) 
+		static TPtr get(lua_State* state, int index) 
 		{  
-			return (*reinterpret_cast<TPtr*>(lua_touserdata(lua, index)));
+			return (*reinterpret_cast<TPtr*>(lua_touserdata(state, index)));
 		}
 
-		static TPtr check(lua_State* lua, int arg) { return (*reinterpret_cast<TPtr*>(luaL_checkudata(lua, arg, ClassParam<TVal>::lua_name))); }
-		static TPtr type_check(lua_State* lua, int arg) { return (*reinterpret_cast<TPtr*>(luaL_testudata(lua, arg, ClassParam<TVal>::lua_name))); }
+		static TPtr check(lua_State* state, int arg) { return (*reinterpret_cast<TPtr*>(luaL_checkudata(state, arg, ClassParam<TVal>::lua_name))); }
+		static TPtr type_check(lua_State* state, int arg) { return (*reinterpret_cast<TPtr*>(luaL_testudata(state, arg, ClassParam<TVal>::lua_name))); }
 	};
 
 	/*==================================================
 	  Register C/C++ function
 
 	  Usage:
-		lua::set_global_fun(lua, {
-			{ "CSum", [](lua_State* lua)->int { return lua::invoke_fun(lua, CSum); } },
-			{ "CConcat", [](lua_State* lua)->int { return lua::invoke_fun(lua, CConcat); } }
+		lua::set_global_fun(state, {
+			{ "CSum", [](lua_State* state)->int { return state::invoke_fun(state, CSum); } },
+			{ "CConcat", [](lua_State* state)->int { return state::invoke_fun(state, CConcat); } }
 		});
 	====================================================*/
+	
+	// Call a function returning void
+	template <typename... TFunArgs, typename... TEvaluatedArgs>
+	int invoke_fun(lua_State* state, int, void(*fn)(TFunArgs... args), void(*)(), TEvaluatedArgs... evaluated_args)
+	{
+		fn(std::forward<TEvaluatedArgs>(evaluated_args)...);
+		return 0;
+	}
 
-	// At the end call the C function
+	// Call a function returning a type
 	template <typename TRetVal, typename... TFunArgs, typename... TEvaluatedArgs>
-	int invoke_fun(lua_State* lua, int, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(), TEvaluatedArgs... evaluated_args) 
+	int invoke_fun(lua_State* state, int, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(), TEvaluatedArgs... evaluated_args) 
 	{
 		auto ret = fn(std::forward<TEvaluatedArgs>(evaluated_args)...);
-		Type<TRetVal>::push(lua, ret);
+		Type<TRetVal>::push(state, ret);
 		return 1;
 	}
 
@@ -149,27 +157,27 @@ namespace lua
 	// call the c function
 	template <typename TRetVal, typename... TFunArgs, typename TArg0, typename... TOtherArgs, typename... TEvaluatedArgs>
 	typename std::enable_if<Type<TArg0>::is_lua_type, int>::type
-		invoke_fun(lua_State* lua, int i, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) 
+		invoke_fun(lua_State* state, int i, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) 
 	{
 		TRetVal(*other_fn)(TOtherArgs... other_values) = nullptr;
-		auto val = Type<TArg0>::get(lua, i);
-		return invoke_fun(lua, i + 1, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
+		auto val = Type<TArg0>::get(state, i);
+		return invoke_fun(state, i + 1, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
 	}
 
 	// Helper function, entry point
-	// Call like: invoke_fun(lua, global_func);
+	// Call like: invoke_fun(state, global_func);
 	template <typename TRetVal, typename... TFunArgs>
-	int invoke_fun(lua_State* lua, TRetVal(*fn)(TFunArgs... args)) 
+	int invoke_fun(lua_State* state, TRetVal(*fn)(TFunArgs... args)) 
 	{
-		return invoke_fun(lua, 1, fn, fn);
+		return invoke_fun(state, 1, fn, fn);
 	}
 
-	void set_global_fun(lua_State* lua, std::vector<luaL_Reg> regs)
+	void set_global_fun(lua_State* state, std::vector<luaL_Reg> regs)
 	{
 		for (auto r : regs)
 		{
-			lua_pushcfunction(lua, r.func);
-			lua_setglobal(lua, r.name);
+			lua_pushcfunction(state, r.func);
+			lua_setglobal(state, r.name);
 		}
 	}
 
@@ -177,14 +185,21 @@ namespace lua
 	  Register C/C++ member function
 
 	  Usage:
-		invoke_mem_fun(lua, &my_class::my_method);
+		invoke_mem_fun(state, &my_class::my_method);
 	====================================================*/
 
-	// At the end call the C function
+	// Call member function returning void
+	template <typename TObject, typename... TFunArgs, typename... TEvaluatedArgs>
+	int invoke_mem_fun(lua_State* state, int, TObject* obj_ptr, void(TObject::* fn)(TFunArgs... args), void(TObject::*)(), TEvaluatedArgs... evaluated_args) {
+		(obj_ptr->*fn)(std::forward<TEvaluatedArgs>(evaluated_args)...);
+		return 0;
+	}
+
+	// Call member function returning a type
 	template <typename TObject, typename TRetVal, typename... TFunArgs, typename... TEvaluatedArgs>
-	int invoke_mem_fun(lua_State* lua, int, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(), TEvaluatedArgs... evaluated_args) {
+	int invoke_mem_fun(lua_State* state, int, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(), TEvaluatedArgs... evaluated_args) {
 		auto ret = (obj_ptr->*fn)(std::forward<TEvaluatedArgs>(evaluated_args)...);
-		Type<TRetVal>::push(lua, ret);
+		Type<TRetVal>::push(state, ret);
 		return 1;
 	}
 
@@ -192,18 +207,18 @@ namespace lua
 	// call the c function
 	template <typename TObject, typename TRetVal, typename... TFunArgs, typename TArg0, typename... TOtherArgs, typename... TEvaluatedArgs>
 	typename std::enable_if<Type<TArg0>::is_lua_type, int>::type
-		invoke_mem_fun(lua_State* lua, int i, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) {
+		invoke_mem_fun(lua_State* state, int i, TObject* obj_ptr, TRetVal(TObject::* fn)(TFunArgs... args), TRetVal(TObject::*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) {
 		TRetVal(TObject:: * other_fn)(TOtherArgs... other_values) = nullptr;
-		auto val = Type<TArg0>::get(lua, i);
-		return invoke_mem_fun(lua, i + 1, obj_ptr, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
+		auto val = Type<TArg0>::get(state, i);
+		return invoke_mem_fun(state, i + 1, obj_ptr, fn, other_fn, std::forward<TEvaluatedArgs>(evaluated_args)..., val);
 	}
 
 	// Helper function, entry point
-	// Call like: invoke_fun(lua, global_func);
+	// Call like: invoke_fun(state, global_func);
 	template <typename TObject, typename TRetVal, typename... TFunArgs>
-	int invoke_mem_fun(lua_State* lua, TRetVal(TObject::* fn)(TFunArgs... args)) {
-		auto obj_ptr = Type<TObject>::check(lua, 1);
-		return invoke_mem_fun(lua, 2, obj_ptr, fn, fn);
+	int invoke_mem_fun(lua_State* state, TRetVal(TObject::* fn)(TFunArgs... args)) {
+		auto obj_ptr = Type<TObject>::check(state, 1);
+		return invoke_mem_fun(state, 2, obj_ptr, fn, fn);
 	}
 
 	/*==================================================
@@ -211,18 +226,18 @@ namespace lua
 	====================================================*/
 	template<typename T>
 	std::enable_if_t<!std::is_invocable_r_v<int, T, lua_State*>>
-	set_global(lua_State* lua, const char* name, T value)
+	set_global(lua_State* state, const char* name, T value)
 	{
-		Type<T>::push(lua, value);
-		lua_setglobal(lua, name);
+		Type<T>::push(state, value);
+		lua_setglobal(state, name);
 	}
 
 	template <typename T>
 	std::enable_if_t<std::is_invocable_r_v<int, T, lua_State*>>
-	set_global(lua_State* lua, const char* name, T fn)
+	set_global(lua_State* state, const char* name, T fn)
 	{
-		lua_pushcfunction(lua, fn);
-		lua_setglobal(lua, name);
+		lua_pushcfunction(state, fn);
+		lua_setglobal(state, name);
 	}
 
 	/*==================================================
@@ -275,10 +290,10 @@ namespace lua
 	};
 
 	template<typename T>
-	T get_global(lua_State* lua, const char* name)
+	T get_global(lua_State* state, const char* name)
 	{
-		lua_getglobal(lua, name);
-		return Type<T>::get(lua, 1);
+		lua_getglobal(state, name);
+		return Type<T>::get(state, 1);
 	}
 
 }
