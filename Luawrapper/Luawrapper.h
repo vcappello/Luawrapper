@@ -3,6 +3,9 @@
 #include "lua.hpp"
 #include <string>
 #include <vector>
+#include <map>
+#include <any>
+#include <variant>
 #include <stdexcept>
 
 // ClassParam is declared in the global namespace in order to
@@ -48,8 +51,8 @@ namespace lua
 		static constexpr bool is_lua_type = true;
 
 		static void push(lua_State* state, const int& value) { lua_pushinteger(state, value); }
-		static int get(lua_State* state, int index) { return lua_tointeger(state, index); }
-		static int check(lua_State* state, int arg) { return luaL_checkinteger(state, arg); }
+		static int get(lua_State* state, int index) { return static_cast<int>(lua_tointeger(state, index)); }
+		static int check(lua_State* state, int arg) { return static_cast<int>(luaL_checkinteger(state, arg)); }
 		static bool type_check(lua_State* state, int index) { return lua_isinteger(state, index); }
 	};
 
@@ -86,12 +89,27 @@ namespace lua
 		static bool type_check(lua_State* state, int index) { return lua_isboolean(state, index); }
 	};
 
+	struct Table
+	{
+		template<typename TKey, typename TValue>
+		static TValue get_field(lua_State* state, const TKey& key) {
+			Type<TKey>::push(state, key);
+			lua_gettable(state, -2); /* get table[key] */ 
+			auto result = Type<TValue>::get(state, -1);
+			lua_pop(state, 1);  /* remove */
+			return result;
+		}
+	};
+
 	/*==================================================
 	  User defined class types
 	====================================================*/
 
 	template<typename T>
-	struct Type<T, std::enable_if_t<std::is_class<T>::value || std::is_class<std::remove_pointer_t<T>>::value>>
+	struct Type<T, std::enable_if_t<
+				   std::is_class_v<T> || 
+		           std::is_class_v<std::remove_pointer_t<T>> && 
+		           !std::is_constructible_v<std::string, T>>>
 	{
 		static constexpr bool is_lua_type = true;
 
@@ -249,7 +267,7 @@ namespace lua
 	}
 
 	/*==================================================
-	  Call
+	  Script and function call with error management
 	====================================================*/
 	int pcall(lua_State* state, int nargs = 0, int nresults = 0, int msgh = 0)
 	{
@@ -260,6 +278,8 @@ namespace lua
 			lua_pop(state, 1);
 			throw error(msg);
 		}
+
+		return result;
 	}
 
 	/*==================================================
@@ -311,4 +331,5 @@ namespace lua
 		lua_getglobal(state, name);
 		return Type<T>::get(state, 1);
 	}
+
 }

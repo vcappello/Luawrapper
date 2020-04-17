@@ -158,9 +158,43 @@ void test_class()
 	lua_close(L);
 }
 
+void test_table()
+{
+	std::cout << "* Test Table" << std::endl;
+
+	lua_State* L = luaL_newstate();
+	luaL_openlibs(L);
+
+	luaL_loadstring(L, R"***(
+		background = { r = 64, g = 128, b = 255 }
+	)***");
+
+	try
+	{
+		lua::pcall(L);
+	}
+	catch (lua::error& err)
+	{
+		std::cerr << err.what() << std::endl;
+	}
+
+	lua_getglobal(L, "background");
+	auto r = lua::Table::get_field<std::string, int>(L, "r");
+	auto g = lua::Table::get_field<std::string, int>(L, "g");
+	auto b = lua::Table::get_field<std::string, int>(L, "b");
+
+	std::cout << "r = " << r << std::endl;
+	std::cout << "g = " << g << std::endl;
+	std::cout << "b = " << b << std::endl;
+
+	lua_close(L);
+}
+
 int main()
 {
 	test_function();
 
 	test_class();
+
+	test_table();
 }
