@@ -158,6 +158,14 @@ void test_class()
 	lua_close(L);
 }
 
+struct color
+{
+	int r;
+	int g;
+	int b;
+};
+
+
 void test_table()
 {
 	std::cout << "* Test Table" << std::endl;
@@ -178,14 +186,22 @@ void test_table()
 		std::cerr << err.what() << std::endl;
 	}
 
-	lua_getglobal(L, "background");
-	auto r = lua::Table::get_field<std::string, int>(L, "r");
-	auto g = lua::Table::get_field<std::string, int>(L, "g");
-	auto b = lua::Table::get_field<std::string, int>(L, "b");
+	lua::GlobalTable<std::string, int> tab(L, "background");
 
-	std::cout << "r = " << r << std::endl;
-	std::cout << "g = " << g << std::endl;
-	std::cout << "b = " << b << std::endl;
+	std::cout << "Acces by range based for loop" << std::endl;
+	for (auto r : tab)
+	{
+		std::cout << r.get_key() << ": " << r.get_value() << std::endl;
+	}
+
+	std::cout << "Access by key" << std::endl;
+	std::cout << "r:" << tab["r"] << std::endl;
+	std::cout << "g:" << tab["g"] << std::endl;
+	std::cout << "b:" << tab["b"] << std::endl;
+
+	std::cout << "Contains key" << std::endl;
+	std::cout << tab.contains_key("r") << std::endl;
+	std::cout << tab.contains_key("pippo") << std::endl;
 
 	lua_close(L);
 }

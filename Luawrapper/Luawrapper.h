@@ -89,16 +89,103 @@ namespace lua
 		static bool type_check(lua_State* state, int index) { return lua_isboolean(state, index); }
 	};
 
-	struct Table
+	template<typename TKey, typename TValue>
+	struct GlobalTable
 	{
+		lua_State* state;
+		std::string table_name;
+		int index;
+
+		GlobalTable(lua_State* state, const std::string& table_name) : state(state), table_name(table_name) 
+		{ 
+			lua_getglobal(state, table_name.c_str());
+			index = lua_gettop(state);
+		}
+
 		template<typename TKey, typename TValue>
-		static TValue get_field(lua_State* state, const TKey& key) {
+		struct Pair
+		{
+			lua_State* state;
+
+			Pair(lua_State* state) : state( state ) { }
+
+			TKey get_key() { return Type<TKey>::get(state, -2); }
+			TValue get_value() { return Type<TValue>::get(state, -1); }
+		};
+
+		struct Iterator
+		{
+			lua_State* state;
+			size_t counter;
+			int index;
+
+			Iterator(lua_State* state, size_t counter, int index) : state(state), counter(counter), index( index ) { }
+
+			Iterator operator++() 
+			{ 
+				lua_pop(state, 1);
+
+				if (lua_next(state, index) != 0)
+				{
+					// Next
+					++counter;
+					return *this;
+				}
+				else
+				{
+					// Last
+					counter = 0;
+					return *this;
+				}
+			}
+
+			bool operator!=(const Iterator& rhs) { return counter != rhs.counter; }
+			const Pair<TKey, TValue>& operator*() const { return Pair<TKey, TValue>(state); }
+		};
+
+		Iterator begin() 
+		{ 
+			lua_pushnil(state);
+			if (lua_next(state, index) != 0)
+			{
+				// Begin
+				return Iterator(state, 1, index);
+			}
+			else
+			{
+				// End (empty table)
+				return end();
+			}
+		};
+		Iterator end() 
+		{ 
+			return Iterator(state, 0, 0);
+		}
+
+		TValue operator[](TKey key)
+		{
 			Type<TKey>::push(state, key);
-			lua_gettable(state, -2); /* get table[key] */ 
+			lua_gettable(state, index); /* get table[key] */ 
 			auto result = Type<TValue>::get(state, -1);
 			lua_pop(state, 1);  /* remove */
 			return result;
 		}
+
+		bool contains_key(TKey key)
+		{
+			Type<TKey>::push(state, key);
+			lua_gettable(state, index); /* get table[key] */
+			return Type<TValue>::type_check(state, -1);
+		}
+
+		//template<typename TKey, typename TValue>
+		//static TValue get_field(lua_State* state, const TKey& key) {
+		//	Type<TKey>::push(state, key);
+		//	lua_gettable(state, -2); /* get table[key] */ 
+		//	auto result = Type<TValue>::get(state, -1);
+		//	lua_pop(state, 1);  /* remove */
+		//	return result;
+		//}
 	};
 
 	/*==================================================
