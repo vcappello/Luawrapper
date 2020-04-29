@@ -89,20 +89,43 @@ namespace lua
 		static bool type_check(lua_State* state, int index) { return lua_isboolean(state, index); }
 	};
 
-	template<typename TKey, typename TValue>
-	struct GlobalTable
+	/*==================================================
+	  Table
+	====================================================*/
+
+	struct ValueProxy
 	{
 		lua_State* state;
-		std::string table_name;
 		int index;
 
-		GlobalTable(lua_State* state, const std::string& table_name) : state(state), table_name(table_name) 
+		ValueProxy(lua_State* state, int index) : state(state), index(index) {}
+
+		template<typename T>
+		operator T ()
+		{
+			T value = Type<T>::get(state, index);
+			lua_pop(state, 1);
+			return value;
+		}
+	};
+
+	template<typename TKey>
+	struct Table
+	{
+		lua_State* state;
+		int index;
+
+		Table(lua_State* state, const std::string& table_name) : state(state)
 		{ 
 			lua_getglobal(state, table_name.c_str());
 			index = lua_gettop(state);
 		}
 
-		template<typename TKey, typename TValue>
+		Table(lua_State* state, int index) : state(state), index(index)
+		{
+		}
+
+		template<typename TKey>
 		struct Pair
 		{
 			lua_State* state;
@@ -110,7 +133,8 @@ namespace lua
 			Pair(lua_State* state) : state( state ) { }
 
 			TKey get_key() { return Type<TKey>::get(state, -2); }
-			TValue get_value() { return Type<TValue>::get(state, -1); }
+
+			ValueProxy get_value() { return ValueProxy(state, -1); }
 		};
 
 		struct Iterator
@@ -123,7 +147,9 @@ namespace lua
 
 			Iterator operator++() 
 			{ 
-				lua_pop(state, 1);
+				// NOTE: Do not need to pop because the ValueProxy class
+				// already pop last value
+				// lua_pop(state, 1); 
 
 				if (lua_next(state, index) != 0)
 				{
@@ -140,7 +166,7 @@ namespace lua
 			}
 
 			bool operator!=(const Iterator& rhs) { return counter != rhs.counter; }
-			const Pair<TKey, TValue>& operator*() const { return Pair<TKey, TValue>(state); }
+			const Pair<TKey>& operator*() const { return Pair<TKey>(state); }
 		};
 
 		Iterator begin() 
@@ -157,20 +183,22 @@ namespace lua
 				return end();
 			}
 		};
+
 		Iterator end() 
 		{ 
 			return Iterator(state, 0, 0);
 		}
 
-		TValue operator[](TKey key)
+		ValueProxy operator[](TKey key)
 		{
 			Type<TKey>::push(state, key);
 			lua_gettable(state, index); /* get table[key] */ 
-			auto result = Type<TValue>::get(state, -1);
-			lua_pop(state, 1);  /* remove */
+			auto result = ValueProxy(state, -1);
+			//lua_pop(state, 1);  /* remove */
 			return result;
 		}
 
+		template<typename TValue>
 		bool contains_key(TKey key)
 		{
 			Type<TKey>::push(state, key);
@@ -178,14 +206,6 @@ namespace lua
 			return Type<TValue>::type_check(state, -1);
 		}
 
-		//template<typename TKey, typename TValue>
-		//static TValue get_field(lua_State* state, const TKey& key) {
-		//	Type<TKey>::push(state, key);
-		//	lua_gettable(state, -2); /* get table[key] */ 
-		//	auto result = Type<TValue>::get(state, -1);
-		//	lua_pop(state, 1);  /* remove */
-		//	return result;
-		//}
 	};
 
 	/*==================================================

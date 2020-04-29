@@ -175,6 +175,8 @@ void test_table()
 
 	luaL_loadstring(L, R"***(
 		background = { r = 64, g = 128, b = 255 }
+		
+		player = { name = 'John Smith', score = 100 }
 	)***");
 
 	try
@@ -186,22 +188,22 @@ void test_table()
 		std::cerr << err.what() << std::endl;
 	}
 
-	lua::GlobalTable<std::string, int> tab(L, "background");
+	lua::Table<std::string> tab(L, "background");
 
 	std::cout << "Acces by range based for loop" << std::endl;
 	for (auto r : tab)
 	{
-		std::cout << r.get_key() << ": " << r.get_value() << std::endl;
+		std::cout << r.get_key() << ": " << (int)r.get_value() << std::endl;
 	}
 
 	std::cout << "Access by key" << std::endl;
-	std::cout << "r:" << tab["r"] << std::endl;
-	std::cout << "g:" << tab["g"] << std::endl;
-	std::cout << "b:" << tab["b"] << std::endl;
+	std::cout << "r: " << (int)tab["r"] << std::endl;
+	std::cout << "g: " << (int)tab["g"] << std::endl;
+	std::cout << "b: " << (int)tab["b"] << std::endl;
 
 	std::cout << "Contains key" << std::endl;
-	std::cout << tab.contains_key("r") << std::endl;
-	std::cout << tab.contains_key("pippo") << std::endl;
+	std::cout << "tab['r']: " << tab.contains_key<int>("r") << std::endl;
+	std::cout << "tab['foo']: " << tab.contains_key<int>("foo") << std::endl;
 
 	lua_close(L);
 }
