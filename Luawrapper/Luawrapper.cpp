@@ -5,6 +5,7 @@
 
 #include "Luawrapper.h"
 
+// Function called by Lia
 int CSum(int n1, int n2)
 {
 	return n1 + n2;
@@ -165,7 +166,6 @@ struct color
 	int b;
 };
 
-
 void test_table()
 {
 	std::cout << "* Test Table" << std::endl;
@@ -204,7 +204,7 @@ void test_table()
 	std::cout << "Contains key" << std::endl;
 	std::cout << "tab['r']: " << tab.contains_key<int>("r") << std::endl;
 	std::cout << "tab['foo']: " << tab.contains_key<int>("foo") << std::endl;
-
+	auto lua_var = lua::get_global<int>(L, "LuaVar");
 	lua_close(L);
 }
 

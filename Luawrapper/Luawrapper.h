@@ -194,7 +194,7 @@ namespace lua
 			Type<TKey>::push(state, key);
 			lua_gettable(state, index); /* get table[key] */ 
 			auto result = ValueProxy(state, -1);
-			//lua_pop(state, 1);  /* remove */
+
 			return result;
 		}
 
