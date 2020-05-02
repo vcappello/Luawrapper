@@ -65,7 +65,7 @@ Register the function in this way, need to give the return type and the type of 
 ```c++
 auto lua_sum = lua::lua_function<int, int, int>(L, "LuaSum");
 ```
-Call the Lua function in this way:
+Call the Lua function in this way, like a C++ function:
 
 ```c++
 int result = lua_sum(1, 2);

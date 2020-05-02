@@ -20,15 +20,14 @@ void test_function()
 {
 	std::cout << "* Test Function" << std::endl;
 
-	lua_State* L = luaL_newstate();
-	luaL_openlibs(L);
+	auto L = std::make_unique<lua::state>(lua::Libs::all);
 
-	lua::set_global_fun(L, {
+	lua::set_global_fun(*L, {
 		{ "CSum", [](lua_State* L)->int { return lua::invoke_fun(L, CSum); } },
 		{ "CConcat", [](lua_State* L)->int { return lua::invoke_fun(L, CConcat); } }
 		});
 
-	luaL_loadstring(L, R"***(
+	luaL_loadstring(*L, R"***(
 		local result = CSum(1, 2)
 		print (result)
 
@@ -48,17 +47,17 @@ void test_function()
 
 	try
 	{
-		lua::pcall(L);
+		lua::pcall(*L);
 	}
 	catch (lua::error& err)
 	{
 		std::cerr << err.what() << std::endl;
 	}
 
-	auto luaVar = lua::get_global<int>(L, "luaVar");
+	auto luaVar = lua::get_global<int>(*L, "luaVar");
 	std::cout << "luaVar = " << luaVar << std::endl;
 
-	auto luaFun = lua::lua_function<int, int>(L, "luaFun");
+	auto luaFun = lua::lua_function<int, int>(*L, "luaFun");
 	try
 	{
 		int luaFunRes = luaFun(5);
@@ -69,7 +68,7 @@ void test_function()
 		std::cerr << err.what() << std::endl;
 	}
 
-	auto luaFun2 = lua::lua_function<void, int>(L, "luaFun2");
+	auto luaFun2 = lua::lua_function<void, int>(*L, "luaFun2");
 	try
 	{
 		luaFun2(5);
@@ -78,8 +77,6 @@ void test_function()
 	{
 		std::cerr << err.what() << std::endl;
 	}
-
-	lua_close(L);
 }
 
 class CClass
@@ -124,15 +121,14 @@ void test_class()
 {
 	std::cout << "* Test Class" << std::endl;
 
-	lua_State* L = luaL_newstate();
-	luaL_openlibs(L);
+	auto L = std::make_unique<lua::state>(lua::Libs::all);
 
 	CClass* obj = new CClass();
-	lua::set_global(L, "CObj", obj);
+	lua::set_global(*L, "CObj", obj);
 
-	lua::set_global(L, "CGetClass", [](lua_State* L)->int { return lua::invoke_fun(L, CGetClass); });
+	lua::set_global(*L, "CGetClass", [](lua_State* L)->int { return lua::invoke_fun(L, CGetClass); });
 
-	luaL_loadstring(L, R"***(
+	luaL_loadstring(*L, R"***(
 		local obj = CGetClass()
 		local r0 = obj:sum(5, 5)
 		print (r0)
@@ -149,14 +145,12 @@ void test_class()
 
 	try
 	{
-		lua::pcall(L);
+		lua::pcall(*L);
 	}
 	catch (lua::error& err)
 	{
 		std::cerr << err.what() << std::endl;
 	}
-
-	lua_close(L);
 }
 
 struct color
@@ -170,42 +164,37 @@ void test_table()
 {
 	std::cout << "* Test Table" << std::endl;
 
-	lua_State* L = luaL_newstate();
-	luaL_openlibs(L);
-
-	luaL_loadstring(L, R"***(
-		background = { r = 64, g = 128, b = 255 }
-		
-		player = { name = 'John Smith', score = 100 }
-	)***");
-
 	try
 	{
-		lua::pcall(L);
+		auto L = std::make_unique<lua::state>(lua::Libs::all);
+		lua::load_string(*L, R"***(
+			background = { r = 64, g = 128, b = 255 }
+			player = { name = 'John Smith', score = 100 }
+		)***");
+		lua::pcall(*L);
+
+		lua::Table<std::string> tab(*L, "background");
+
+		std::cout << "Acces by range based for loop" << std::endl;
+		for (auto r : tab)
+		{
+			std::cout << r.get_key() << ": " << (int)r.get_value() << std::endl;
+		}
+
+		std::cout << "Access by key" << std::endl;
+		std::cout << "r: " << (int)tab["r"] << std::endl;
+		std::cout << "g: " << (int)tab["g"] << std::endl;
+		std::cout << "b: " << (int)tab["b"] << std::endl;
+
+		std::cout << "Contains key" << std::endl;
+		std::cout << "tab['r']: " << tab.contains_key<int>("r") << std::endl;
+		std::cout << "tab['foo']: " << tab.contains_key<int>("foo") << std::endl;
+		auto lua_var = lua::get_global<int>(*L, "LuaVar");
 	}
 	catch (lua::error& err)
 	{
-		std::cerr << err.what() << std::endl;
+		std::cerr << "Error:" << err.what() << std::endl;
 	}
-
-	lua::Table<std::string> tab(L, "background");
-
-	std::cout << "Acces by range based for loop" << std::endl;
-	for (auto r : tab)
-	{
-		std::cout << r.get_key() << ": " << (int)r.get_value() << std::endl;
-	}
-
-	std::cout << "Access by key" << std::endl;
-	std::cout << "r: " << (int)tab["r"] << std::endl;
-	std::cout << "g: " << (int)tab["g"] << std::endl;
-	std::cout << "b: " << (int)tab["b"] << std::endl;
-
-	std::cout << "Contains key" << std::endl;
-	std::cout << "tab['r']: " << tab.contains_key<int>("r") << std::endl;
-	std::cout << "tab['foo']: " << tab.contains_key<int>("foo") << std::endl;
-	auto lua_var = lua::get_global<int>(L, "LuaVar");
-	lua_close(L);
 }
 
 int main()

@@ -20,18 +20,82 @@ struct ClassParam
 
 namespace lua
 {
+	/*==================================================
+	  error
+	====================================================*/
+
 	class error : public std::runtime_error
 	{
 	public:
 		error(const std::string& msg) : runtime_error(msg.c_str()) {}
 		virtual ~error() noexcept {}
+
+		static std::string get_error_message(lua_State* state);
 	};
 
 	/*==================================================
-	  state types
+	  state
+	====================================================*/
 
-	  This section contain the definition of the class
-	  Type 
+	enum class Libs
+	{
+		all
+	};
+
+	class state
+	{
+	public:
+		state(Libs ls)
+		{
+			m_state = luaL_newstate();
+
+			if (ls == Libs::all)
+			{
+				luaL_openlibs(m_state);
+			}
+		}
+
+		~state()
+		{
+			lua_close(m_state);
+		}
+
+		operator lua_State* ()
+		{
+			return m_state;
+		}
+
+	private:
+		lua_State* m_state;
+	};
+
+	void load_string(lua_State* state, const std::string& script)
+	{
+		auto ret = luaL_loadstring(state, script.c_str());
+
+		if (ret != LUA_OK)
+		{
+			// TODO: proper handle LUA_ERRSYNTAX, LUA_ERRMEM, LUA_ERRGCMM
+			throw error(error::get_error_message(state));
+		}
+	}
+
+	void load_file(lua_State* state, const std::string& filename)
+	{
+		auto ret = luaL_loadfile(state, filename.c_str());
+
+		if (ret != LUA_OK)
+		{
+			// TODO: proper handle like load_string and add LUA_ERRFILE
+			throw error(error::get_error_message(state));
+		}
+	}
+
+	/*==================================================
+	  Types
+
+	  This section contain the definition of the
+	  class Type
 	====================================================*/
 
 	template<typename T, typename Enable = void>
@@ -44,6 +108,13 @@ namespace lua
 		static T check(lua_State* state, int arg) { };
 		static bool type_check(lua_State* state, int index) { };
 	};
+
+	/*==================================================
+	  Types
+
+	  This section contain the specialization of the
+	  class Type
+	====================================================*/
 
 	template<>
 	struct Type<int>
@@ -116,7 +187,7 @@ namespace lua
 		int index;
 
 		Table(lua_State* state, const std::string& table_name) : state(state)
-		{ 
+		{
 			lua_getglobal(state, table_name.c_str());
 			index = lua_gettop(state);
 		}
@@ -130,7 +201,7 @@ namespace lua
 		{
 			lua_State* state;
 
-			Pair(lua_State* state) : state( state ) { }
+			Pair(lua_State* state) : state(state) { }
 
 			TKey get_key() { return Type<TKey>::get(state, -2); }
 
@@ -143,10 +214,10 @@ namespace lua
 			size_t counter;
 			int index;
 
-			Iterator(lua_State* state, size_t counter, int index) : state(state), counter(counter), index( index ) { }
+			Iterator(lua_State* state, size_t counter, int index) : state(state), counter(counter), index(index) { }
 
-			Iterator operator++() 
-			{ 
+			Iterator operator++()
+			{
 				// NOTE: Do not need to pop because the ValueProxy class
 				// already pop last value
 				// lua_pop(state, 1); 
@@ -166,11 +237,11 @@ namespace lua
 			}
 
 			bool operator!=(const Iterator& rhs) { return counter != rhs.counter; }
-			const Pair<TKey>& operator*() const { return Pair<TKey>(state); }
+			Pair<TKey> operator*() const { return Pair<TKey>(state); }
 		};
 
-		Iterator begin() 
-		{ 
+		Iterator begin()
+		{
 			lua_pushnil(state);
 			if (lua_next(state, index) != 0)
 			{
@@ -184,15 +255,15 @@ namespace lua
 			}
 		};
 
-		Iterator end() 
-		{ 
+		Iterator end()
+		{
 			return Iterator(state, 0, 0);
 		}
 
 		ValueProxy operator[](TKey key)
 		{
 			Type<TKey>::push(state, key);
-			lua_gettable(state, index); /* get table[key] */ 
+			lua_gettable(state, index); /* get table[key] */
 			auto result = ValueProxy(state, -1);
 
 			return result;
@@ -214,17 +285,17 @@ namespace lua
 
 	template<typename T>
 	struct Type<T, std::enable_if_t<
-				   std::is_class_v<T> || 
-		           std::is_class_v<std::remove_pointer_t<T>> && 
-		           !std::is_constructible_v<std::string, T>>>
+		std::is_class_v<T> ||
+		std::is_class_v<std::remove_pointer_t<T>> &&
+		!std::is_constructible_v<std::string, T>>>
 	{
 		static constexpr bool is_lua_type = true;
 
 		using TPtr = std::conditional_t<std::is_class<T>::value, T*, T>;
 		using TVal = std::conditional_t<std::is_class<T>::value, T, std::remove_pointer_t<T>>;
 
-		static void push(lua_State* state, TPtr value) 
-		{  
+		static void push(lua_State* state, TPtr value)
+		{
 			if (luaL_newmetatable(state, ClassParam<TVal>::lua_name) == 1)
 			{
 				// Metatable index for objects
@@ -250,8 +321,8 @@ namespace lua
 			}
 		}
 
-		static TPtr get(lua_State* state, int index) 
-		{  
+		static TPtr get(lua_State* state, int index)
+		{
 			return (*reinterpret_cast<TPtr*>(lua_touserdata(state, index)));
 		}
 
@@ -268,7 +339,7 @@ namespace lua
 			{ "CConcat", [](lua_State* state)->int { return state::invoke_fun(state, CConcat); } }
 		});
 	====================================================*/
-	
+
 	// Call a function returning void
 	template <typename... TFunArgs, typename... TEvaluatedArgs>
 	int invoke_fun(lua_State* state, int, void(*fn)(TFunArgs... args), void(*)(), TEvaluatedArgs... evaluated_args)
@@ -279,7 +350,7 @@ namespace lua
 
 	// Call a function returning a type
 	template <typename TRetVal, typename... TFunArgs, typename... TEvaluatedArgs>
-	int invoke_fun(lua_State* state, int, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(), TEvaluatedArgs... evaluated_args) 
+	int invoke_fun(lua_State* state, int, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(), TEvaluatedArgs... evaluated_args)
 	{
 		auto ret = fn(std::forward<TEvaluatedArgs>(evaluated_args)...);
 		Type<TRetVal>::push(state, ret);
@@ -290,7 +361,7 @@ namespace lua
 	// call the c function
 	template <typename TRetVal, typename... TFunArgs, typename TArg0, typename... TOtherArgs, typename... TEvaluatedArgs>
 	typename std::enable_if<Type<TArg0>::is_lua_type, int>::type
-		invoke_fun(lua_State* state, int i, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args) 
+		invoke_fun(lua_State* state, int i, TRetVal(*fn)(TFunArgs... args), TRetVal(*)(TArg0, TOtherArgs... other_values), TEvaluatedArgs... evaluated_args)
 	{
 		TRetVal(*other_fn)(TOtherArgs... other_values) = nullptr;
 		auto val = Type<TArg0>::get(state, i);
@@ -300,7 +371,7 @@ namespace lua
 	// Helper function, entry point
 	// Call like: invoke_fun(state, global_func);
 	template <typename TRetVal, typename... TFunArgs>
-	int invoke_fun(lua_State* state, TRetVal(*fn)(TFunArgs... args)) 
+	int invoke_fun(lua_State* state, TRetVal(*fn)(TFunArgs... args))
 	{
 		return invoke_fun(state, 1, fn, fn);
 	}
@@ -359,7 +430,7 @@ namespace lua
 	====================================================*/
 	template<typename T>
 	std::enable_if_t<!std::is_invocable_r_v<int, T, lua_State*>>
-	set_global(lua_State* state, const char* name, T value)
+		set_global(lua_State* state, const char* name, T value)
 	{
 		Type<T>::push(state, value);
 		lua_setglobal(state, name);
@@ -367,7 +438,7 @@ namespace lua
 
 	template <typename T>
 	std::enable_if_t<std::is_invocable_r_v<int, T, lua_State*>>
-	set_global(lua_State* state, const char* name, T fn)
+		set_global(lua_State* state, const char* name, T fn)
 	{
 		lua_pushcfunction(state, fn);
 		lua_setglobal(state, name);
@@ -381,9 +452,7 @@ namespace lua
 		int result = 0;
 		if (result = lua_pcall(state, nargs, nresults, msgh) != 0)
 		{
-			auto msg = Type<std::string>::get(state, -1);
-			lua_pop(state, 1);
-			throw error(msg);
+			throw error(error::get_error_message(state));
 		}
 
 		return result;
@@ -395,7 +464,7 @@ namespace lua
 	template<typename TRet, typename... TArgs>
 	struct lua_function
 	{
-		lua_function(lua_State* state, const std::string& name) : state( state ), name( name ) { }
+		lua_function(lua_State* state, const std::string& name) : state(state), name(name) { }
 
 		TRet operator()(TArgs... args)
 		{
@@ -437,6 +506,13 @@ namespace lua
 	{
 		lua_getglobal(state, name);
 		return Type<T>::get(state, 1);
+	}
+
+	std::string error::get_error_message(lua_State* state)
+	{
+		auto msg = Type<std::string>::get(state, -1);
+		lua_pop(state, 1);
+		return msg;
 	}
 
 }
